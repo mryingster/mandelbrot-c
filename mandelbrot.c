@@ -1,28 +1,49 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-//#include <cairo-svg.h>
+#include <gd.h>
 
-int outputPPM(void *_array, int width, int height, int depth)
+void save_png(gdImagePtr im, const char *filename)
+{
+    FILE *fp;
+    fp = fopen(filename, "wb");
+    if (!fp) {
+        fprintf(stderr, "Can't save png image %s\n", filename);
+        return;
+    }
+    gdImagePng(im, fp);
+    fclose(fp);
+}
+
+
+int hex_color(int r, int g, int b)
+{
+    return r*0x10000+g*0x100+b;
+}
+
+int output_gd_png(void *_array, int width, int height, int depth)
 {
     int x, y;
     int (*array)[height][width] = _array;
-    FILE *fp;
-    fp=fopen("mandelbrot.ppm", "w");
+    int color=0;
 
-    fprintf(fp, "P2\n");
-    fprintf(fp, "%i %i\n", width, height);
-    fprintf(fp, "%i\n", depth);
+    // Draw to buffer
+    gdImagePtr im;
+    im = gdImageCreateTrueColor(width, height);
+
     for (y=0; y<height; y++)
         for (x=0; x<width; x++)
         {
             if ((*array)[y][x] == -1)
-                fprintf(fp, "0 ");
+                color=0;
             else
-                fprintf(fp, "%i ", depth-(*array)[y][x]);
+                color=hex_color(0, 255/depth*(*array)[y][x], 0);
+            gdImageSetPixel(im, x, y, color);
         }
-        fprintf(fp, "\n");
-    fclose(fp);
+
+    // Write to file
+    save_png(im, filename);
+    gdImageDestroy(im);
     return 0;
 }
 
@@ -69,6 +90,11 @@ int main()
         fflush(stdout);
     }
 
-    outputPPM(*array, width, height, depth);
+    // Output
+    printf("\nWriting to file.\n");
+    output_gd_png(*array, width, height, depth);
+
+    // Exit
+    free(*array);
     return 0;
 }
