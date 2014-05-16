@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <gd.h>
+#include <string.h>
+#include <err.h>
 
 void save_png(gdImagePtr im, const char *filename)
 {
@@ -15,13 +17,45 @@ void save_png(gdImagePtr im, const char *filename)
     fclose(fp);
 }
 
+void help()
+{
+    //      0        10        20        30        40        50        60        70        80
+    //      |         |         |         |         |         |         |         |         |
+    printf("Mandelbrot\n\n"
+           "Usage\n"
+           "    Generates mandelbrot images based on user parameters.\n\n"
+           "Options\n"
+           "    -h, --help      Show help screen\n"
+           "    -o <output.png> Specify output PNG filename   (default: mandelbrot.png)\n"
+           "    --width <int>   Specify image width in pixels (default: 1024)\n"
+           "    --height <int>  Specify image height in pixels (default: 1024)\n"
+           "    --coords <x> <y> <x range> <y range>\n"
+           "                    Specify coordinates for view (default: -2 2 4 4)\n"
+           "    --gradient <hex> <hex>\n"
+           "                    Specify gradient starting and ending colors in 32 bit HEX\n"
+           "                    (default: 0xFF0000 0xFFFF00)\n"
+           "    --depth <int>   Specify how many times to calculate each pixel\n"
+           "                    (default: 100)\n");
+    exit(0);
+}
 
 int hex_color(int r, int g, int b)
 {
     return r*0x10000+g*0x100+b;
 }
 
-int output_gd_png(void *_array, int width, int height, int depth)
+int return_color(int color1, int color2, int depth, int z)
+{
+    int rStart = color1 / 0x10000, rEnd = color2 / 0x10000;
+    float rStep = (rEnd - rStart) / depth;
+    int gStart = color1 / 0x100 & 0xff, gEnd = color2 / 0x100 & 0xff;
+    float gStep = (gEnd - gStart) / depth;
+    int bStart = color1 & 0xff, bEnd = color2 & 0xff;
+    float bStep = (bEnd - bStart) / depth;
+    return hex_color(rStart+(rStep*z), gStart+(gStep*z), bStart+(bStep*z));
+}
+
+int output_gd_png(void *_array, int width, int height, int depth, const char *filename, int colorStart, int colorEnd)
 {
     int x, y;
     int (*array)[height][width] = _array;
@@ -37,7 +71,7 @@ int output_gd_png(void *_array, int width, int height, int depth)
             if ((*array)[y][x] == -1)
                 color=0;
             else
-                color=hex_color(0, 255/depth*(*array)[y][x], 0);
+                color=return_color(colorStart, colorEnd, depth, (*array)[y][x]);
             gdImageSetPixel(im, x, y, color);
         }
 
@@ -65,17 +99,86 @@ int mandel(double x, double y, int depth)
     return -1;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    double xStart=-2, yStart=-2;     // Start Coordinates
-    double xRange=4,  yRange=4;      // Range Coordinates
-    int    width=512, height=512;    // Pixel size of output
-    double xStep = xRange/width;     // x Step Value
-    double yStep = yRange/height;    // y Step Value
-    double xValue, yValue;           // X Y Values at Pixel Locations
-    int    depth = 50;               // Level of depth for Mandelbrot Calculation
-    int    x, y;                     // Other variables
-    int    array[height][width];     // Array to store values
+    double xStart = -2,   yStart = 2;    // Default Start Coordinates
+    double xRange = 4,    yRange = 4;    // Default Range Coordinates
+    int    width  = 1024, height = 1024; // Default Pixel size of output
+    int    depth  = 100;                 // Default Depth level of Mandelbrot Calculation
+    int    colorStart = 0x000000, colorEnd = 0x00FF00; // Default color gradient settings
+    char   *filename = "mandelbrot.png"; // Default PNG output name
+    int    i;                            // Misc variables
+    char   *endptr;
+
+    // Parse Arguments
+    for (i=1; i<argc; i++)
+     {
+        if (strcmp(argv[i], "--width") == 0)
+        {
+            if (i == argc-1) errx(EXIT_FAILURE, "Argument, \"%s,\" requires additional integer.", argv[i]);
+            width = strtoul(argv[i+1], &endptr, 10);
+            if (*endptr || width < 1)
+                errx(EXIT_FAILURE, "Bad argument, \"%s\". Must be a positive integer.", argv[i]);
+            i++;
+        }
+        else if (strcmp(argv[i], "--height") == 0)
+        {
+            if (i == argc-1) errx(EXIT_FAILURE, "Argument, \"%s,\" requires additional integer.", argv[i]);
+            height = strtoul(argv[i+1], &endptr, 10);
+            if (*endptr || width < 1)
+                errx(EXIT_FAILURE, "Bad argument, \"%s\". Must be a positive integer.", argv[i]);
+            i++;
+        }
+        else if (strcmp(argv[i], "--depth") == 0)
+        {
+            if (i == argc-1) errx(EXIT_FAILURE, "Argument, \"%s,\" requires additional integer.", argv[i]);
+            depth = strtoul(argv[i+1], &endptr, 10);
+            if (*endptr || width < 1)
+                errx(EXIT_FAILURE, "Bad argument, \"%s\". Must be a positive integer.", argv[i]);
+            i++;
+        }
+        else if (strcmp(argv[i], "--coords") == 0)
+        {
+            if (i+4 > argc-1) errx(EXIT_FAILURE, "Argument, \"%s,\" requires 4 floating point numbers.", argv[i]);
+            xStart=strtod(argv[i+1], &endptr);
+            if (*endptr) errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify 4 floating point numbers.", argv[i]);
+            yStart=strtod(argv[i+2], &endptr);
+            if (*endptr) errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify 4 floating point numbers.", argv[i]);
+            xRange=strtod(argv[i+3], &endptr);
+            if (*endptr) errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify 4 floating point numbers.", argv[i]);
+            yRange=strtod(argv[i+4], &endptr);
+            if (*endptr) errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify 4 floating point numbers.", argv[i]);
+            i=i+4;
+        }
+        else if (strcmp(argv[i], "--gradient") == 0)
+        {
+            if (i+2 > argc-1) errx(EXIT_FAILURE, "Argument, \"%s,\" requires 2 HEX colors.", argv[i]);
+            colorStart=strtoul(argv[i+1], &endptr, 16);
+            if (*endptr) errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify 2 6-digit HEX numbers.", argv[i]);
+            colorEnd=strtoul(argv[i+2], &endptr, 16);
+            if (*endptr) errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify 2 6-digit HEX numbers.", argv[i]);
+            i=i+2;
+        }
+        else if (strcmp(argv[i], "-o") == 0)
+        {
+            filename = argv[i+1];
+            i++;
+        }
+        else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0 )
+        {
+            help();
+        }
+        else
+        {
+            errx(EXIT_FAILURE, "Unknown argument, \"%s\".", argv[i]);
+        }
+     }
+
+    double xStep  = xRange/width;        // X Step Value
+    double yStep  = yRange/height;       // Y Step Value
+    double xValue, yValue;               // X and Y Values for Pixel Locations
+    int    x, y;                         // X and Y values for table
+    int    (*array)[height][width] = malloc(height*width*sizeof(int)); // Array to store values
 
     // Main loop
     for (y=0; y<height; y++)
@@ -83,8 +186,8 @@ int main()
         for (x=0; x<width; x++)
         {
             xValue = xStart + (x * xStep);
-            yValue = yStart + (y * yStep);
-            array[y][x] = mandel(xValue, yValue, depth);
+            yValue = yStart - (y * yStep);
+            (*array)[y][x] = mandel(xValue, yValue, depth);
         }
         printf("\r%i%% Complete", ((y+1)*100)/height);
         fflush(stdout);
@@ -92,7 +195,7 @@ int main()
 
     // Output
     printf("\nWriting to file.\n");
-    output_gd_png(*array, width, height, depth);
+    output_gd_png(*array, width, height, depth, filename, colorStart, colorEnd);
 
     // Exit
     free(*array);
