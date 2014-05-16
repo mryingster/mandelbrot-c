@@ -1,3 +1,6 @@
+// -*- compile-command: "gcc -o mandelbrot mandelbrot.c -lgd -lpng -Wall" -*-
+// Copyright (c) 2014 Michael Caldwell
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
