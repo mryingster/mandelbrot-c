@@ -44,14 +44,14 @@ void help()
 
 int hex_color(int r, int g, int b)
 {
-    return r*0x10000+g*0x100+b;
+  return ( r << 16 & 0xff0000 ) | ( g << 8 & 0x00ff00 ) | ( b & 0x0000ff );
 }
 
 int return_color(int color1, int color2, int depth, int z)
 {
-    int rStart = color1 / 0x10000, rEnd = color2 / 0x10000;
+    int rStart = color1 >> 16, rEnd = color2 >> 16;
     float rStep = (rEnd - rStart) / depth;
-    int gStart = color1 / 0x100 & 0xff, gEnd = color2 / 0x100 & 0xff;
+    int gStart = color1 >> 8 & 0xff, gEnd = color2 >> 8 & 0xff;
     float gStep = (gEnd - gStart) / depth;
     int bStart = color1 & 0xff, bEnd = color2 & 0xff;
     float bStep = (bEnd - bStart) / depth;
