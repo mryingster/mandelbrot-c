@@ -36,9 +36,9 @@ void help()
            "                    Specify coordinates for view (default: -2 2 4 4)\n"
            "    --gradient <hex> <hex>\n"
            "                    Specify gradient starting and ending colors in 32 bit HEX\n"
-           "                    (default: 0xFF0000 0xFFFF00)\n"
+           "                    (default: 0x0000FF 0xFF0000)\n"
            "    --depth <int>   Specify how many times to calculate each pixel\n"
-           "                    (default: 100)\n");
+           "                    (default: 50)\n");
     exit(0);
 }
 
@@ -129,8 +129,8 @@ int main(int argc, char *argv[])
     double xStart = -2,   yStart = 2;    // Default Start Coordinates
     double xRange = 4,    yRange = 4;    // Default Range Coordinates
     int    width  = 1024, height = 1024; // Default Pixel size of output
-    int    depth  = 100;                 // Default Depth level of Mandelbrot Calculation
-    int    colorStart = 0x000000, colorEnd = 0x00FF00; // Default color gradient settings
+    int    depth  = 50;                  // Default Depth level of Mandelbrot Calculation
+    int    colorStart = 0x0000FF, colorEnd = 0xFF0000; // Default color gradient settings
     char   *filename = "mandelbrot.png"; // Default PNG output name
     int    i;                            // Misc variables
 
