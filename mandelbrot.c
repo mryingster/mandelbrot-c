@@ -99,6 +99,28 @@ int mandel(double x, double y, int depth)
     return -1;
 }
 
+int arg_check_int(int argc, char *argv[], int i, int numvar, int base)
+{
+    char *endptr;
+    int  return_value;
+    if (i == argc-numvar) errx(EXIT_FAILURE, "Argument, \"%s,\" requires additional %s.", argv[i], base == 10 ? "integer" : base == 16 ? "HEX number" : "base %i number");
+    return_value = strtoul(argv[i+numvar], &endptr, base);
+    if (*endptr || return_value < 1)
+        errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify a positive %s.", argv[i], base == 10 ? "integer" : base == 16 ? "HEX number" : "base %i number");
+    return return_value;
+}
+
+float arg_check_float(int argc, char *argv[], int i, int numvar)
+{
+    char *endptr;
+    int  return_value;
+    if (i == argc-numvar) errx(EXIT_FAILURE, "Argument, \"%s,\" requires additional floating point number.", argv[i]);
+    return_value = strtod(argv[i+numvar], &endptr);
+    if (*endptr)
+        errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify a floating point number.", argv[i]);
+    return return_value;
+}
+
 int main(int argc, char *argv[])
 {
     double xStart = -2,   yStart = 2;    // Default Start Coordinates
@@ -108,55 +130,37 @@ int main(int argc, char *argv[])
     int    colorStart = 0x000000, colorEnd = 0x00FF00; // Default color gradient settings
     char   *filename = "mandelbrot.png"; // Default PNG output name
     int    i;                            // Misc variables
-    char   *endptr;
 
     // Parse Arguments
     for (i=1; i<argc; i++)
      {
         if (strcmp(argv[i], "--width") == 0)
         {
-            if (i == argc-1) errx(EXIT_FAILURE, "Argument, \"%s,\" requires additional integer.", argv[i]);
-            width = strtoul(argv[i+1], &endptr, 10);
-            if (*endptr || width < 1)
-                errx(EXIT_FAILURE, "Bad argument, \"%s\". Must be a positive integer.", argv[i]);
+            width = arg_check_int(argc, argv, i, 1, 10);
             i++;
         }
         else if (strcmp(argv[i], "--height") == 0)
         {
-            if (i == argc-1) errx(EXIT_FAILURE, "Argument, \"%s,\" requires additional integer.", argv[i]);
-            height = strtoul(argv[i+1], &endptr, 10);
-            if (*endptr || width < 1)
-                errx(EXIT_FAILURE, "Bad argument, \"%s\". Must be a positive integer.", argv[i]);
+            height = arg_check_int(argc, argv, i, 1, 10);
             i++;
         }
         else if (strcmp(argv[i], "--depth") == 0)
         {
-            if (i == argc-1) errx(EXIT_FAILURE, "Argument, \"%s,\" requires additional integer.", argv[i]);
-            depth = strtoul(argv[i+1], &endptr, 10);
-            if (*endptr || width < 1)
-                errx(EXIT_FAILURE, "Bad argument, \"%s\". Must be a positive integer.", argv[i]);
+            depth = arg_check_int(argc, argv, i, 1, 10);
             i++;
         }
         else if (strcmp(argv[i], "--coords") == 0)
         {
-            if (i+4 > argc-1) errx(EXIT_FAILURE, "Argument, \"%s,\" requires 4 floating point numbers.", argv[i]);
-            xStart=strtod(argv[i+1], &endptr);
-            if (*endptr) errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify 4 floating point numbers.", argv[i]);
-            yStart=strtod(argv[i+2], &endptr);
-            if (*endptr) errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify 4 floating point numbers.", argv[i]);
-            xRange=strtod(argv[i+3], &endptr);
-            if (*endptr) errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify 4 floating point numbers.", argv[i]);
-            yRange=strtod(argv[i+4], &endptr);
-            if (*endptr) errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify 4 floating point numbers.", argv[i]);
+            xStart = arg_check_float(argc, argv, i, 1);
+            yStart = arg_check_float(argc, argv, i, 2);
+            xRange = arg_check_float(argc, argv, i, 3);
+            yRange = arg_check_float(argc, argv, i, 4);
             i=i+4;
         }
         else if (strcmp(argv[i], "--gradient") == 0)
         {
-            if (i+2 > argc-1) errx(EXIT_FAILURE, "Argument, \"%s,\" requires 2 HEX colors.", argv[i]);
-            colorStart=strtoul(argv[i+1], &endptr, 16);
-            if (*endptr) errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify 2 6-digit HEX numbers.", argv[i]);
-            colorEnd=strtoul(argv[i+2], &endptr, 16);
-            if (*endptr) errx(EXIT_FAILURE, "Bad argument, \"%s\". Must specify 2 6-digit HEX numbers.", argv[i]);
+            colorStart = arg_check_int(argc, argv, i, 1, 16);
+            colorEnd = arg_check_int(argc, argv, i, 2, 16);
             i=i+2;
         }
         else if (strcmp(argv[i], "-o") == 0)
