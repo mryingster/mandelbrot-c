@@ -3,7 +3,7 @@ Mandelbrot
 
 Description
 -----------
-Mandelbrot is a mandelbrot generator written in c. It will ouput an image to a PNG formatted file.
+Mandelbrot is a mandelbrot generator written in C99. It will output an image to a PNG formatted file.
 
 Dependencies
 ------------
