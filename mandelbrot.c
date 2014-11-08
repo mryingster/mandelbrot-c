@@ -116,7 +116,7 @@ int arg_check_int(int argc, char *argv[], int i, int numvar, int base)
 float arg_check_float(int argc, char *argv[], int i, int numvar)
 {
     char *endptr;
-    int  return_value;
+    double return_value;
     if (i == argc-numvar) errx(EXIT_FAILURE, "Argument, \"%s,\" requires additional floating point number.", argv[i]);
     return_value = strtod(argv[i+numvar], &endptr);
     if (*endptr)
@@ -158,13 +158,13 @@ int main(int argc, char *argv[])
             yStart = arg_check_float(argc, argv, i, 2);
             xRange = arg_check_float(argc, argv, i, 3);
             yRange = arg_check_float(argc, argv, i, 4);
-            i=i+4;
+            i+=4;
         }
         else if (strcmp(argv[i], "--gradient") == 0)
         {
             colorStart = arg_check_int(argc, argv, i, 1, 16);
             colorEnd = arg_check_int(argc, argv, i, 2, 16);
-            i=i+2;
+            i+=2;
         }
         else if (strcmp(argv[i], "-o") == 0)
         {
@@ -186,6 +186,8 @@ int main(int argc, char *argv[])
     double xValue, yValue;               // X and Y Values for Pixel Locations
     int    x, y;                         // X and Y values for table
     int    (*array)[height][width] = malloc(height*width*sizeof(int)); // Array to store values
+
+    //printf("%f %f %f %f %d %d %f %f\n", xStart, yStart, xRange, yRange, width, height, xStep, yStep);
 
     // Main loop
     for (y=0; y<height; y++)
