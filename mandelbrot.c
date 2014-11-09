@@ -8,17 +8,13 @@
 #include <string.h>
 #include <err.h>
 
-void save_png(gdImagePtr im, const char *filename)
-{
-    FILE *fp;
-    fp = fopen(filename, "wb");
-    if (!fp) {
-        fprintf(stderr, "Can't save png image %s\n", filename);
-        return;
-    }
-    gdImagePng(im, fp);
-    fclose(fp);
-}
+typedef struct color color;
+
+struct color{
+    int r;
+    int g;
+    int b;
+};
 
 void help()
 {
@@ -42,23 +38,58 @@ void help()
     exit(0);
 }
 
+void copyColor(color *in, color *out)
+{
+    out->r = in->r;
+    out->g = in->g;
+    out->b = in->b;
+}
+
+void genSpectrum(color colors[], int *numColors)
+{
+    *numColors = 256 * 6;
+    color c;
+    c.r = 255;
+    c.g = 0;
+    c.b = 0;
+    copyColor(&c, &colors[0]);
+    for (int i=1; i<*numColors; i++)
+    {
+        if      ( c.r == 255 && c.g <  255 && c.b == 0 )               c.g += 1;  // Red to yellow
+        else if ( c.r <= 255 && c.g == 255 && c.b == 0   && c.r != 0 ) c.r -= 1;  // Yellow to green
+        else if ( c.r == 0   && c.g == 255 && c.b <  255 )             c.b += 1;  // Green to cyan
+        else if ( c.r == 0   && c.g <= 255 && c.b == 255 && c.g != 0 ) c.g -= 1;  // Cyan to blue
+        else if ( c.r <  255 && c.g == 0   && c.b == 255 )             c.r += 1;  // Blue to purple
+        else if ( c.r == 255 && c.g == 0   && c.b <= 255 && c.b != 0 ) c.b -= 1;  // Purple to red
+        copyColor(&c, &colors[i]);
+    }
+}
+
 int hex_color(int r, int g, int b)
 {
-  return ( r << 16 & 0xff0000 ) | ( g << 8 & 0x00ff00 ) | ( b & 0x0000ff );
+    return ( r << 16 & 0xff0000 ) | ( g << 8 & 0x00ff00 ) | ( b & 0x0000ff );
 }
 
-int return_color(int color1, int color2, int depth, int z)
+int return_color(color c[], int numColors, int depth, int z)
 {
-    int rStart = color1 >> 16, rEnd = color2 >> 16;
-    float rStep = (rEnd - rStart) / depth;
-    int gStart = color1 >> 8 & 0xff, gEnd = color2 >> 8 & 0xff;
-    float gStep = (gEnd - gStart) / depth;
-    int bStart = color1 & 0xff, bEnd = color2 & 0xff;
-    float bStep = (bEnd - bStart) / depth;
-    return hex_color(rStart+(rStep*z), gStart+(gStep*z), bStart+(bStep*z));
+    numColors /= 1.5;
+    double calc = pow((z/(depth-1.0)), .7) * numColors;
+    return hex_color(c[(int)calc].r, c[(int)calc].g, c[(int)calc].b);
 }
 
-int output_gd_png(void *_array, int width, int height, int depth, const char *filename, int colorStart, int colorEnd)
+void save_png(gdImagePtr im, const char *filename)
+{
+    FILE *fp;
+    fp = fopen(filename, "wb");
+    if (!fp) {
+        fprintf(stderr, "Can't save png image %s\n", filename);
+        return;
+    }
+    gdImagePng(im, fp);
+    fclose(fp);
+}
+
+int output_gd_png(void *_array, int width, int height, int depth, const char *filename, color colors[], int numColors)
 {
     int x, y;
     int (*array)[height][width] = _array;
@@ -74,7 +105,7 @@ int output_gd_png(void *_array, int width, int height, int depth, const char *fi
             if ((*array)[y][x] == -1)
                 color=0;
             else
-                color=return_color(colorStart, colorEnd, depth, (*array)[y][x]);
+                color=return_color(colors, numColors, depth, (*array)[y][x]);
             gdImageSetPixel(im, x, y, color);
         }
 
@@ -187,6 +218,12 @@ int main(int argc, char *argv[])
     int    x, y;                         // X and Y values for table
     int    (*array)[height][width] = malloc(height*width*sizeof(int)); // Array to store values
 
+    color colors[2048];
+    int numColors = 0;
+    genSpectrum(colors, &numColors);
+
+    printf("%d %d %d (%d)\n", colors[1].r, colors[1].g, colors[1].b, numColors);
+
     //printf("%f %f %f %f %d %d %f %f\n", xStart, yStart, xRange, yRange, width, height, xStep, yStep);
 
     // Main loop
@@ -204,7 +241,7 @@ int main(int argc, char *argv[])
 
     // Output
     printf("\nWriting to file.\n");
-    output_gd_png(*array, width, height, depth, filename, colorStart, colorEnd);
+    output_gd_png(*array, width, height, depth, filename, colors, numColors);
 
     // Exit
     free(*array);
