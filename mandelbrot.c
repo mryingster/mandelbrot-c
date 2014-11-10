@@ -1,4 +1,4 @@
-// -*- compile-command: "gcc -o mandelbrot mandelbrot.c -lgd -lpng -Wall" -*-
+// -*- compile-command: "gcc -o mandelbrot mandelbrot.c -lgd -lpng -Wall -O3" -*-
 // Copyright (c) 2014 Michael Caldwell
 
 #include <stdio.h>
@@ -14,6 +14,7 @@ struct color{
     int r;
     int g;
     int b;
+    int hex;
 };
 
 void help()
@@ -38,11 +39,26 @@ void help()
     exit(0);
 }
 
+color hexToColor(int hex)
+{
+    color c;
+    c.r = hex >> 16 & 0xff;
+    c.g = hex >> 8 & 0xff;
+    c.b = hex & 0xff;
+    return c;
+}
+
+int colorToHex(color c)
+{
+    return ( c.r << 16 & 0xff0000 ) | ( c.g << 8 & 0x00ff00 ) | ( c.b & 0x0000ff );
+}
+
 void copyColor(color *in, color *out)
 {
     out->r = in->r;
     out->g = in->g;
     out->b = in->b;
+    out->hex = colorToHex(*in);
 }
 
 void genSpectrum(color colors[], int *numColors)
@@ -65,16 +81,32 @@ void genSpectrum(color colors[], int *numColors)
     }
 }
 
-int hex_color(int r, int g, int b)
+void genGradient(color c[], int *numColors, const int start, const int end)
 {
-    return ( r << 16 & 0xff0000 ) | ( g << 8 & 0x00ff00 ) | ( b & 0x0000ff );
+    *numColors = 256;
+    color cs = hexToColor(start);
+    color ce = hexToColor(end);
+    float rd = 1.0 * (ce.r - cs.r) / *numColors;
+    float gd = 1.0 * (ce.g - cs.g) / *numColors;
+    float bd = 1.0 * (ce.b - cs.b) / *numColors;
+    for (int i=0; i<*numColors; i++)
+    {
+        c[i].r = cs.r + (rd * i);
+        c[i].g = cs.g + (gd * i);
+        c[i].b = cs.b + (bd * i);
+    }
 }
 
-int return_color(color c[], int numColors, int depth, int z)
+void scaleColor(color colorIn[], color colorOut[], int numColors, int depth, float power)
 {
-    numColors /= 1.5;
-    double calc = pow((z/(depth-1.0)), .7) * numColors;
-    return hex_color(c[(int)calc].r, c[(int)calc].g, c[(int)calc].b);
+    for (int z = 0; z < depth ; z++)
+    {
+        double calc = pow((z/(depth-1.0)), power) * numColors;
+        colorOut[z].r = colorIn[(int)calc].r;
+        colorOut[z].g = colorIn[(int)calc].g;
+        colorOut[z].b = colorIn[(int)calc].b;
+        colorOut[z].hex = colorToHex(colorOut[z]);
+    }
 }
 
 void save_png(gdImagePtr im, const char *filename)
@@ -105,7 +137,7 @@ int output_gd_png(void *_array, int width, int height, int depth, const char *fi
             if ((*array)[y][x] == -1)
                 color=0;
             else
-                color=return_color(colors, numColors, depth, (*array)[y][x]);
+                color=colors[(*array)[y][x]].hex; //return_color(colors, numColors, depth, (*array)[y][x]);
             gdImageSetPixel(im, x, y, color);
         }
 
@@ -160,10 +192,16 @@ int main(int argc, char *argv[])
     double xStart = -2,   yStart = 2;    // Default Start Coordinates
     double xRange = 4,    yRange = 4;    // Default Range Coordinates
     int    width  = 1024, height = 1024; // Default Pixel size of output
-    int    depth  = 50;                  // Default Depth level of Mandelbrot Calculation
-    int    colorStart = 0x0000FF, colorEnd = 0xFF0000; // Default color gradient settings
+    int    depth  = 100;                 // Default Depth level of Mandelbrot Calculation
+    color  colorsIn[2048];               // Colors array
+    int    numColors = 0;                // Number of colors to use in color array
+    float  colorPower = .3;              // Power exponent to use for color selection
+    int    colorStart = 0xFF0000, colorEnd = 0xFFFF00; // Default color gradient settings
     char   *filename = "mandelbrot.png"; // Default PNG output name
     int    i;                            // Misc variables
+
+    // Generate default gradient first
+    genGradient(colorsIn, &numColors, colorStart, colorEnd);
 
     // Parse Arguments
     for (i=1; i<argc; i++)
@@ -191,10 +229,16 @@ int main(int argc, char *argv[])
             yRange = arg_check_float(argc, argv, i, 4);
             i+=4;
         }
+        else if (strcmp(argv[i], "--spectrum") == 0)
+        {
+            genSpectrum(colorsIn, &numColors);
+	    colorPower = .7;
+        }
         else if (strcmp(argv[i], "--gradient") == 0)
         {
             colorStart = arg_check_int(argc, argv, i, 1, 16);
             colorEnd = arg_check_int(argc, argv, i, 2, 16);
+            genGradient(colorsIn, &numColors, colorStart, colorEnd);
             i+=2;
         }
         else if (strcmp(argv[i], "-o") == 0)
@@ -218,11 +262,9 @@ int main(int argc, char *argv[])
     int    x, y;                         // X and Y values for table
     int    (*array)[height][width] = malloc(height*width*sizeof(int)); // Array to store values
 
+    // Create final array of colors to use that is scaled to the depth that is selected
     color colors[2048];
-    int numColors = 0;
-    genSpectrum(colors, &numColors);
-
-    printf("%d %d %d (%d)\n", colors[1].r, colors[1].g, colors[1].b, numColors);
+    scaleColor(colorsIn, colors, numColors, depth, colorPower);
 
     //printf("%f %f %f %f %d %d %f %f\n", xStart, yStart, xRange, yRange, width, height, xStep, yStep);
 
