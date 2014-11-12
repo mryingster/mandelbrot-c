@@ -1,4 +1,4 @@
-// -*- compile-command: "gcc -o mandelbrot mandelbrot.c -lgd -lpng -Wall -O3" -*-
+// -*- compile-command: "gcc -std=c99 -o mandelbrot mandelbrot.c -lgd -lpng -Wall -O3" -*-
 // Copyright (c) 2014 Michael Caldwell
 
 #include <stdio.h>
@@ -34,8 +34,9 @@ void help()
            "    --gradient <hex> <hex>\n"
            "                    Specify gradient starting and ending colors in 32 bit HEX\n"
            "                    (default: 0x0000FF 0xFF0000)\n"
+           "    --spectrum      Use whole RGB spectrum instead of a 2 point gradient\n"
            "    --depth <int>   Specify how many times to calculate each pixel\n"
-           "                    (default: 50)\n");
+           "                    (default: 100)\n");
     exit(0);
 }
 
@@ -45,6 +46,7 @@ color hexToColor(int hex)
     c.r = hex >> 16 & 0xff;
     c.g = hex >> 8 & 0xff;
     c.b = hex & 0xff;
+    c.hex = hex;
     return c;
 }
 
@@ -191,7 +193,7 @@ int main(int argc, char *argv[])
 {
     double xStart = -2,   yStart = 2;    // Default Start Coordinates
     double xRange = 4,    yRange = 4;    // Default Range Coordinates
-    int    width  = 1024, height = 1024; // Default Pixel size of output
+    int    width  = -1,   height = -1;   // Invalid pixel size, to be set later
     int    depth  = 100;                 // Default Depth level of Mandelbrot Calculation
     color  colorsIn[2048];               // Colors array
     int    numColors = 0;                // Number of colors to use in color array
@@ -255,6 +257,12 @@ int main(int argc, char *argv[])
             errx(EXIT_FAILURE, "Unknown argument, \"%s\".", argv[i]);
         }
      }
+
+    // Make proportional image if only one dimension is specified
+    // Set to default width and height if not specified
+    if      (height < 0 && width > 0) height = width / xRange * yRange;
+    else if (height > 0 && width < 0) width = height / yRange * xRange;
+    else if (height < 0 && width < 0) width = height = 1024;
 
     double xStep  = xRange/width;        // X Step Value
     double yStep  = yRange/height;       // Y Step Value
