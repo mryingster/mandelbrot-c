@@ -7,6 +7,8 @@
 #include <gd.h>
 #include <string.h>
 #include <err.h>
+#include <time.h>
+#include <stdlib.h>
 
 typedef struct color color;
 
@@ -35,6 +37,7 @@ void help()
            "                    Specify gradient starting and ending colors in 32 bit HEX\n"
            "                    (default: 0x0000FF 0xFF0000)\n"
            "    --spectrum      Use whole RGB spectrum instead of a 2 point gradient\n"
+           "    --random        Use random color values instead of gradient"
            "    --depth <int>   Specify how many times to calculate each pixel\n"
            "                    (default: 100)\n");
     exit(0);
@@ -96,6 +99,18 @@ void genGradient(color c[], int *numColors, const int start, const int end)
         c[i].r = cs.r + (rd * i);
         c[i].g = cs.g + (gd * i);
         c[i].b = cs.b + (bd * i);
+    }
+}
+
+void genRandom(color c[], int *numColors)
+{
+    *numColors = 2048;
+    srand(time(NULL));
+    for (int i=0; i<*numColors; i++)
+    {
+        c[i].r = rand() % 255;
+        c[i].g = rand() % 255;
+        c[i].b = rand() % 255;
     }
 }
 
@@ -235,6 +250,11 @@ int main(int argc, char *argv[])
         {
             genSpectrum(colorsIn, &numColors);
 	    colorPower = .7;
+        }
+        else if (strcmp(argv[i], "--random") == 0)
+        {
+            genRandom(colorsIn, &numColors);
+	    colorPower = 1;
         }
         else if (strcmp(argv[i], "--gradient") == 0)
         {
