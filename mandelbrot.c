@@ -1,4 +1,4 @@
-// -*- compile-command: "gcc -std=c99 -o mandelbrot mandelbrot.c -lgd -lpng -Wall -O3" -*-
+// -*- compile-command: "gcc -std=c99 -o mandelbrot mandelbrot.c -lgd -lpng $(pkg-config --libs --cflags sdl2) -Wall -O3" -*-
 // Copyright (c) 2014 Michael Caldwell
 
 #include <stdio.h>
@@ -9,6 +9,7 @@
 #include <err.h>
 #include <time.h>
 #include <stdlib.h>
+#include <SDL.h>
 
 typedef struct color color;
 
@@ -296,22 +297,47 @@ int main(int argc, char *argv[])
 
     //printf("%f %f %f %f %d %d %f %f\n", xStart, yStart, xRange, yRange, width, height, xStep, yStep);
 
-    // Main loop
-    for (y=0; y<height; y++)
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Window* Main_Window;
+    SDL_Renderer* Main_Renderer;
+    Main_Window = SDL_CreateWindow("Mandelbrot", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, 0);
+    Main_Renderer = SDL_CreateRenderer(Main_Window, -1, SDL_RENDERER_ACCELERATED);
+
+    //Main Loop
+    while (1)
     {
-        for (x=0; x<width; x++)
+        // Render Loop
+        for (y=0; y<height; y++)
         {
-            xValue = xStart + (x * xStep);
-            yValue = yStart - (y * yStep);
-            (*array)[y][x] = mandel(xValue, yValue, depth);
+            for (x=0; x<width; x++)
+            {
+                xValue = xStart + (x * xStep);
+                yValue = yStart - (y * yStep);
+                int result = mandel(xValue, yValue, depth);
+                (*array)[y][x] = result;
+                if (result == -1)
+                    SDL_SetRenderDrawColor(Main_Renderer, 0, 0, 0, 255);
+                else
+                    SDL_SetRenderDrawColor(Main_Renderer, colors[result].r, colors[result].g, colors[result].b, 255);
+                SDL_RenderDrawPoint(Main_Renderer, x, y);
+
+            }
+            //printf("\r%i%% Complete", ((y+1)*100)/height);
+            //fflush(stdout);
         }
-        printf("\r%i%% Complete", ((y+1)*100)/height);
-        fflush(stdout);
+        SDL_RenderPresent(Main_Renderer);
+
+        SDL_Event e;
+        SDL_WaitEvent(&e);
+        if (e.type == SDL_QUIT) {
+            SDL_Log("Program quit after %i ticks", e.quit.timestamp);
+            break;
+        }
     }
 
     // Output
-    printf("\nWriting to file.\n");
-    output_gd_png(*array, width, height, depth, filename, colors, numColors);
+    //printf("\nWriting to file.\n");
+    //output_gd_png(*array, width, height, depth, filename, colors, numColors);
 
     // Exit
     free(*array);
