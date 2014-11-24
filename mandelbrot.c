@@ -10,9 +10,9 @@
 #include <time.h>
 #include <stdlib.h>
 #include <SDL.h>
+#include <stdbool.h>
 
 typedef struct color color;
-
 struct color{
     int r;
     int g;
@@ -333,28 +333,31 @@ int main(int argc, char *argv[])
     Main_Renderer = SDL_CreateRenderer(Main_Window, -1, SDL_RENDERER_ACCELERATED);
 
     //Main Loop
+    bool needsRender = true;
     while (1)
     {
         // Render Loop
-        for (int y=0; y<coord.height; y++)
+        if (needsRender)
         {
-            for (int x=0; x<coord.width; x++)
+            for (int y=0; y<coord.height; y++)
             {
-                double xValue = coord.x + (x * coord.xS);
-                double yValue = coord.y - (y * coord.yS);
-                int result = mandel(xValue, yValue, depth);
-                (*array)[y][x] = result;
-                if (result == -1)
-                    SDL_SetRenderDrawColor(Main_Renderer, 0, 0, 0, 255);
-                else
-                    SDL_SetRenderDrawColor(Main_Renderer, colors[result].r, colors[result].g, colors[result].b, 255);
-                SDL_RenderDrawPoint(Main_Renderer, x, y);
+                for (int x=0; x<coord.width; x++)
+                {
+                    double xValue = coord.x + (x * coord.xS);
+                    double yValue = coord.y - (y * coord.yS);
+                    int result = mandel(xValue, yValue, depth);
+                    (*array)[y][x] = result;
+                    if (result == -1)
+                        SDL_SetRenderDrawColor(Main_Renderer, 0, 0, 0, 255);
+                    else
+                        SDL_SetRenderDrawColor(Main_Renderer, colors[result].r, colors[result].g, colors[result].b, 255);
+                    SDL_RenderDrawPoint(Main_Renderer, x, y);
 
+                }
             }
-            //printf("\r%i%% Complete", ((y+1)*100)/height);
-            //fflush(stdout);
+            SDL_RenderPresent(Main_Renderer);
+            needsRender = false;
         }
-        SDL_RenderPresent(Main_Renderer);
 
         SDL_Event e;
         SDL_WaitEvent(&e);
@@ -364,6 +367,7 @@ int main(int argc, char *argv[])
                 coord_zoom(&coord, 1);
             else
                 coord_zoom(&coord, -1);
+            needsRender = true;
         }
         if (e.type == SDL_KEYUP)
         {
