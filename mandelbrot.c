@@ -12,6 +12,8 @@
 #include <SDL.h>
 #include <stdbool.h>
 
+#define MAX_WINDOW_SIZE 2560
+
 typedef struct color color;
 struct color{
     int r;
@@ -318,7 +320,8 @@ int main(int argc, char *argv[])
 
     coord.xS = coord.xR/coord.width;  // X Step Value
     coord.yS = coord.yR/coord.height; // Y Step Value
-    int    (*array)[coord.height][coord.width] = malloc(coord.height*coord.width*sizeof(int)); // Array to store values
+    //int    (*array)[coord.height][coord.width] = malloc(coord.height*coord.width*sizeof(int)); // Array to store values
+    int    (*array)[MAX_WINDOW_SIZE][MAX_WINDOW_SIZE] = malloc(MAX_WINDOW_SIZE*MAX_WINDOW_SIZE*sizeof(int)); // Array to store values
 
     // Create final array of colors to use that is scaled to the depth that is selected
     color colors[2048];
@@ -329,7 +332,7 @@ int main(int argc, char *argv[])
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window* Main_Window;
     SDL_Renderer* Main_Renderer;
-    Main_Window = SDL_CreateWindow("Mandelbrot", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, coord.width, coord.height, 0);
+    Main_Window = SDL_CreateWindow("Mandelbrot", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, coord.width, coord.height, SDL_WINDOW_RESIZABLE);
     Main_Renderer = SDL_CreateRenderer(Main_Window, -1, SDL_RENDERER_ACCELERATED);
 
     //Main Loop
@@ -368,6 +371,23 @@ int main(int argc, char *argv[])
             else
                 coord_zoom(&coord, -1);
             needsRender = true;
+        }
+        if (e.type == SDL_WINDOWEVENT)
+        {
+            if (e.window.event == SDL_WINDOWEVENT_RESIZED)
+            {
+                // Restrict max window size
+                if (e.window.data1 > MAX_WINDOW_SIZE) SDL_SetWindowSize(Main_Window, MAX_WINDOW_SIZE, e.window.data2);
+                if (e.window.data2 > MAX_WINDOW_SIZE) SDL_SetWindowSize(Main_Window, e.window.data1, MAX_WINDOW_SIZE);
+
+                coord.width = e.window.data1;
+                coord.height = e.window.data2;
+                coord.xR = coord.width * coord.xS;
+                coord.yR = coord.height * coord.yS;
+                //printf("%d, %d, %F, %F\n", coord.width, coord.height, coord.xS, coord.yS);
+
+                needsRender = true;
+            }
         }
         if (e.type == SDL_KEYUP)
         {
