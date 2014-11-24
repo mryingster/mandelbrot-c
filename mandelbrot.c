@@ -365,16 +365,20 @@ int main(int argc, char *argv[])
             else
                 coord_zoom(&coord, -1);
         }
+        if (e.type == SDL_KEYUP)
+        {
+            if (e.key.keysym.sym == SDLK_s)
+            {
+                printf("\nWriting to file, %s.\n", filename);
+                output_gd_png(*array, coord.width, coord.height, depth, filename, colors, numColors);
+            }
+        }
         if (e.type == SDL_QUIT)
         {
             SDL_Log("Program quit after %i ticks", e.quit.timestamp);
             break;
         }
     }
-
-    // Output
-    //printf("\nWriting to file.\n");
-    //output_gd_png(*array, width, height, depth, filename, colors, numColors);
 
     // Exit
     free(*array);
