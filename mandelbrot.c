@@ -20,6 +20,18 @@ struct color{
     int hex;
 };
 
+typedef struct coordinates coordinates;
+struct coordinates{
+    int    width;  // Width of render
+    int    height; // Height of render
+    double x;      // x coordinate
+    double xR;     // x range
+    double xS;     // x Step Value
+    double y;      // y coordinate
+    double yR;     // y range
+    double yS;     // y step value
+};
+
 void help()
 {
     //      0        10        20        30        40        50        60        70        80
@@ -183,6 +195,19 @@ int mandel(double x, double y, int depth)
     return -1;
 }
 
+void coord_zoom(coordinates *coord, const double zoom)
+{
+    double old_xR = coord->xR;
+    coord->xR *= pow(.9, zoom);
+    coord->x += ( old_xR - coord->xR ) / 2;
+    coord->xS = coord->xR/coord->width;
+
+    double old_yR = coord->yR;
+    coord->yR *= pow(.9, zoom);
+    coord->y -= ( old_yR - coord->yR ) / 2;
+    coord->yS = coord->yR/coord->height;
+}
+
 int arg_check_int(int argc, char *argv[], int i, int numvar, int base)
 {
     char *endptr;
@@ -207,9 +232,7 @@ float arg_check_float(int argc, char *argv[], int i, int numvar)
 
 int main(int argc, char *argv[])
 {
-    double xStart = -2,   yStart = 2;    // Default Start Coordinates
-    double xRange = 4,    yRange = 4;    // Default Range Coordinates
-    int    width  = -1,   height = -1;   // Invalid pixel size, to be set later
+    coordinates coord;                   // Coodinates Structure
     int    depth  = 100;                 // Default Depth level of Mandelbrot Calculation
     color  colorsIn[2048];               // Colors array
     int    numColors = 0;                // Number of colors to use in color array
@@ -217,6 +240,14 @@ int main(int argc, char *argv[])
     int    colorStart = 0xFF0000, colorEnd = 0xFFFF00; // Default color gradient settings
     char   *filename = "mandelbrot.png"; // Default PNG output name
     int    i;                            // Misc variables
+
+    // Set default coordinates before reading in args
+    coord.x = -2;      // Default Start Coordinates
+    coord.y = 2;
+    coord.xR = 4;      // Default Range Coordinates
+    coord.yR = 4;
+    coord.width = -1;  // Invalid pixel size, to be set later
+    coord.height = -1;
 
     // Generate default gradient first
     genGradient(colorsIn, &numColors, colorStart, colorEnd);
@@ -226,12 +257,12 @@ int main(int argc, char *argv[])
      {
         if (strcmp(argv[i], "--width") == 0)
         {
-            width = arg_check_int(argc, argv, i, 1, 10);
+            coord.width = arg_check_int(argc, argv, i, 1, 10);
             i++;
         }
         else if (strcmp(argv[i], "--height") == 0)
         {
-            height = arg_check_int(argc, argv, i, 1, 10);
+            coord.height = arg_check_int(argc, argv, i, 1, 10);
             i++;
         }
         else if (strcmp(argv[i], "--depth") == 0)
@@ -241,10 +272,10 @@ int main(int argc, char *argv[])
         }
         else if (strcmp(argv[i], "--coords") == 0)
         {
-            xStart = arg_check_float(argc, argv, i, 1);
-            yStart = arg_check_float(argc, argv, i, 2);
-            xRange = arg_check_float(argc, argv, i, 3);
-            yRange = arg_check_float(argc, argv, i, 4);
+            coord.x  = arg_check_float(argc, argv, i, 1);
+            coord.y  = arg_check_float(argc, argv, i, 2);
+            coord.xR = arg_check_float(argc, argv, i, 3);
+            coord.yR = arg_check_float(argc, argv, i, 4);
             i+=4;
         }
         else if (strcmp(argv[i], "--spectrum") == 0)
@@ -281,15 +312,13 @@ int main(int argc, char *argv[])
 
     // Make proportional image if only one dimension is specified
     // Set to default width and height if not specified
-    if      (height < 0 && width > 0) height = width / xRange * yRange;
-    else if (height > 0 && width < 0) width = height / yRange * xRange;
-    else if (height < 0 && width < 0) width = height = 1024;
+    if      (coord.height < 0 && coord.width > 0) coord.height = coord.width  / coord.xR * coord.yR;
+    else if (coord.height > 0 && coord.width < 0) coord.width  = coord.height / coord.yR * coord.xR;
+    else if (coord.height < 0 && coord.width < 0) coord.width  = coord.height = 1024;
 
-    double xStep  = xRange/width;        // X Step Value
-    double yStep  = yRange/height;       // Y Step Value
-    double xValue, yValue;               // X and Y Values for Pixel Locations
-    int    x, y;                         // X and Y values for table
-    int    (*array)[height][width] = malloc(height*width*sizeof(int)); // Array to store values
+    coord.xS = coord.xR/coord.width;  // X Step Value
+    coord.yS = coord.yR/coord.height; // Y Step Value
+    int    (*array)[coord.height][coord.width] = malloc(coord.height*coord.width*sizeof(int)); // Array to store values
 
     // Create final array of colors to use that is scaled to the depth that is selected
     color colors[2048];
@@ -300,19 +329,19 @@ int main(int argc, char *argv[])
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window* Main_Window;
     SDL_Renderer* Main_Renderer;
-    Main_Window = SDL_CreateWindow("Mandelbrot", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, 0);
+    Main_Window = SDL_CreateWindow("Mandelbrot", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, coord.width, coord.height, 0);
     Main_Renderer = SDL_CreateRenderer(Main_Window, -1, SDL_RENDERER_ACCELERATED);
 
     //Main Loop
     while (1)
     {
         // Render Loop
-        for (y=0; y<height; y++)
+        for (int y=0; y<coord.height; y++)
         {
-            for (x=0; x<width; x++)
+            for (int x=0; x<coord.width; x++)
             {
-                xValue = xStart + (x * xStep);
-                yValue = yStart - (y * yStep);
+                double xValue = coord.x + (x * coord.xS);
+                double yValue = coord.y - (y * coord.yS);
                 int result = mandel(xValue, yValue, depth);
                 (*array)[y][x] = result;
                 if (result == -1)
@@ -329,7 +358,15 @@ int main(int argc, char *argv[])
 
         SDL_Event e;
         SDL_WaitEvent(&e);
-        if (e.type == SDL_QUIT) {
+        if (e.type == SDL_MOUSEWHEEL)
+        {
+            if (e.wheel.y > 0)
+                coord_zoom(&coord, 1);
+            else
+                coord_zoom(&coord, -1);
+        }
+        if (e.type == SDL_QUIT)
+        {
             SDL_Log("Program quit after %i ticks", e.quit.timestamp);
             break;
         }
