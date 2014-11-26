@@ -43,6 +43,7 @@ void help()
            "    Generates mandelbrot images based on user parameters.\n\n"
            "Options\n"
            "    -h, --help      Show help screen\n"
+           "    -nw             No Window Mode. Saves directly to file without a gui."
            "    -o <output.png> Specify output PNG filename   (default: mandelbrot.png)\n"
            "    --width <int>   Specify image width in pixels (default: 1024)\n"
            "    --height <int>  Specify image height in pixels (default: 1024)\n"
@@ -141,6 +142,24 @@ void scaleColor(color colorIn[], color colorOut[], int numColors, int depth, flo
     }
 }
 
+int mandel(double x, double y, int depth)
+{
+    double xP=0, yP=0; // Prime Values
+    double xT=0, yT=0; // Temporary Values
+    int i=0;
+
+    for (i=0; i<depth; i++)
+    {
+        xT = (pow(xP, 2)) + x - (pow(yP, 2));
+        yT = 2 * xP * yP + y;
+        if (pow(fabs(xT),2) + pow(fabs(yT),2) > 4)
+            return i;
+        xP = xT;
+        yP = yT;
+    }
+    return -1;
+}
+
 void save_png(gdImagePtr im, const char *filename)
 {
     FILE *fp;
@@ -179,22 +198,25 @@ int output_gd_png(void *_array, int width, int height, int depth, const char *fi
     return 0;
 }
 
-int mandel(double x, double y, int depth)
+void generate_png(coordinates coord, int depth, char *filename, color colors[], int numColors)
 {
-    double xP=0, yP=0; // Prime Values
-    double xT=0, yT=0; // Temporary Values
-    int i=0;
+    int (*array)[coord.height][coord.width] = malloc(coord.height*coord.width*sizeof(int));
 
-    for (i=0; i<depth; i++)
+    for (int y=0; y<coord.height; y++)
     {
-        xT = (pow(xP, 2)) + x - (pow(yP, 2));
-        yT = 2 * xP * yP + y;
-        if (pow(fabs(xT),2) + pow(fabs(yT),2) > 4)
-            return i;
-        xP = xT;
-        yP = yT;
+        for (int x=0; x<coord.width; x++)
+        {
+            double xValue = coord.x + (x * coord.xS);
+            double yValue = coord.y - (y * coord.yS);
+            (*array)[y][x] = mandel(xValue, yValue, depth);
+        }
+        printf("\r%i%% Complete", ((y+1)*100)/coord.height);
+        fflush(stdout);
     }
-    return -1;
+    printf("\nWriting to file, %s.\n", filename);
+    output_gd_png(*array, coord.width, coord.height, depth, filename, colors, numColors);
+
+    free(*array);
 }
 
 void coord_zoom(coordinates *coord, const double zoom)
@@ -242,6 +264,7 @@ int main(int argc, char *argv[])
     int    colorStart = 0xFF0000, colorEnd = 0xFFFF00; // Default color gradient settings
     char   *filename = "mandelbrot.png"; // Default PNG output name
     int    i;                            // Misc variables
+    bool   noWindow = false;             // Default flag for no-window mode
 
     // Set default coordinates before reading in args
     coord.x = -2;      // Default Start Coordinates
@@ -306,6 +329,10 @@ int main(int argc, char *argv[])
         {
             help();
         }
+        else if (strcmp(argv[i], "-nw") == 0 )
+        {
+            noWindow = true;
+        }
         else
         {
             errx(EXIT_FAILURE, "Unknown argument, \"%s\".", argv[i]);
@@ -320,14 +347,19 @@ int main(int argc, char *argv[])
 
     coord.xS = coord.xR/coord.width;  // X Step Value
     coord.yS = coord.yR/coord.height; // Y Step Value
-    //int    (*array)[coord.height][coord.width] = malloc(coord.height*coord.width*sizeof(int)); // Array to store values
-    int    (*array)[MAX_WINDOW_SIZE][MAX_WINDOW_SIZE] = malloc(MAX_WINDOW_SIZE*MAX_WINDOW_SIZE*sizeof(int)); // Array to store values
 
     // Create final array of colors to use that is scaled to the depth that is selected
     color colors[2048];
     scaleColor(colorsIn, colors, numColors, depth, colorPower);
 
-    //printf("%f %f %f %f %d %d %f %f\n", xStart, yStart, xRange, yRange, width, height, xStep, yStep);
+    //printf("%f %f %f %f %d %d %f %f\n", xStart, yStart, xRange, yRange, width, height, xStep, yStep); //DEBUG
+
+    //If no window mode, just output file and exit
+    if (noWindow)
+    {
+        generate_png(coord, depth, filename, colors, numColors);
+        return 0;
+    }
 
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window* Main_Window;
@@ -349,7 +381,6 @@ int main(int argc, char *argv[])
                     double xValue = coord.x + (x * coord.xS);
                     double yValue = coord.y - (y * coord.yS);
                     int result = mandel(xValue, yValue, depth);
-                    (*array)[y][x] = result;
                     if (result == -1)
                         SDL_SetRenderDrawColor(Main_Renderer, 0, 0, 0, 255);
                     else
@@ -372,31 +403,24 @@ int main(int argc, char *argv[])
                 coord_zoom(&coord, -1);
             needsRender = true;
         }
+
         if (e.type == SDL_WINDOWEVENT)
-        {
             if (e.window.event == SDL_WINDOWEVENT_RESIZED)
             {
-                // Restrict max window size
-                if (e.window.data1 > MAX_WINDOW_SIZE) SDL_SetWindowSize(Main_Window, MAX_WINDOW_SIZE, e.window.data2);
-                if (e.window.data2 > MAX_WINDOW_SIZE) SDL_SetWindowSize(Main_Window, e.window.data1, MAX_WINDOW_SIZE);
-
+                // Adjust view to new size
                 coord.width = e.window.data1;
                 coord.height = e.window.data2;
                 coord.xR = coord.width * coord.xS;
                 coord.yR = coord.height * coord.yS;
-                //printf("%d, %d, %F, %F\n", coord.width, coord.height, coord.xS, coord.yS);
 
+                //Rerender
                 needsRender = true;
             }
-        }
+
         if (e.type == SDL_KEYUP)
-        {
             if (e.key.keysym.sym == SDLK_s)
-            {
-                printf("\nWriting to file, %s.\n", filename);
-                output_gd_png(*array, coord.width, coord.height, depth, filename, colors, numColors);
-            }
-        }
+                generate_png(coord, depth, filename, colors, numColors);
+
         if (e.type == SDL_QUIT)
         {
             SDL_Log("Program quit after %i ticks", e.quit.timestamp);
@@ -404,7 +428,5 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Exit
-    free(*array);
     return 0;
 }
