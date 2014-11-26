@@ -34,6 +34,15 @@ struct coordinates{
     double yS;     // y step value
 };
 
+typedef struct mouse mouse;
+struct mouse{
+    int mouseX;
+    int mouseY;
+    double coordX;
+    double coordY;
+    bool down;
+};
+
 void help()
 {
     //      0        10        20        30        40        50        60        70        80
@@ -367,6 +376,10 @@ int main(int argc, char *argv[])
     Main_Window = SDL_CreateWindow("Mandelbrot", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, coord.width, coord.height, SDL_WINDOW_RESIZABLE);
     Main_Renderer = SDL_CreateRenderer(Main_Window, -1, SDL_RENDERER_ACCELERATED);
 
+    // Set up struct for tracking mouse movement
+    mouse mouseTracker;
+    mouseTracker.down = false;
+
     //Main Loop
     bool needsRender = true;
     while (1)
@@ -416,6 +429,27 @@ int main(int argc, char *argv[])
                 //Rerender
                 needsRender = true;
             }
+
+        if (e.type == SDL_MOUSEBUTTONDOWN)
+            if (e.button.state == SDL_PRESSED)
+            {
+                mouseTracker.mouseX = e.motion.x;
+                mouseTracker.mouseY = e.motion.y;
+                mouseTracker.coordX = coord.x;
+                mouseTracker.coordY = coord.y;
+                mouseTracker.down = true;
+            }
+
+        if (e.type == SDL_MOUSEBUTTONUP)
+            if (e.button.state == SDL_RELEASED)
+                mouseTracker.down = false;
+
+        if (e.type == SDL_MOUSEMOTION && mouseTracker.down == true)
+        {
+            coord.x = mouseTracker.coordX + ((mouseTracker.mouseX - e.motion.x) * coord.xS);
+            coord.y = mouseTracker.coordY - ((mouseTracker.mouseY - e.motion.y) * coord.yS);
+            needsRender = true;
+        }
 
         if (e.type == SDL_KEYUP)
             if (e.key.keysym.sym == SDLK_s)
