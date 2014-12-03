@@ -11,8 +11,16 @@
 #include <stdlib.h>
 #include <SDL.h>
 #include <stdbool.h>
+#include <sys/time.h>
+#include <err.h>
 
-#define MAX_WINDOW_SIZE 2560
+uint64_t utime()
+{
+    struct timeval tp;
+    if (gettimeofday(&tp, NULL) != 0)
+        err(EXIT_FAILURE, "gettimeofday");
+    return tp.tv_sec * 1000000ULL + tp.tv_usec;
+}
 
 typedef struct color color;
 struct color{
@@ -41,6 +49,12 @@ struct mouse{
     double coordX;
     double coordY;
     bool down;
+};
+
+typedef struct depth depth;
+struct depth{
+    int d;
+    bool automatic;
 };
 
 void help()
@@ -143,11 +157,12 @@ void scaleColor(color colorIn[], color colorOut[], int numColors, int depth, flo
 {
     for (int z = 0; z < depth ; z++)
     {
-        double calc = pow((z/(depth-1.0)), power) * numColors;
+        double calc = pow((z/(depth*1.0)), power) * numColors;
         colorOut[z].r = colorIn[(int)calc].r;
         colorOut[z].g = colorIn[(int)calc].g;
         colorOut[z].b = colorIn[(int)calc].b;
         colorOut[z].hex = colorToHex(colorOut[z]);
+        //printf("%d, %F, %d, %d, %02X%02X%02X\n", z, calc, numColors, (int)calc, colorOut[z].r, colorOut[z].g, colorOut[z].b);
     }
 }
 
@@ -241,6 +256,17 @@ void coord_zoom(coordinates *coord, const double zoom)
     coord->yS = coord->yR/coord->height;
 }
 
+void print_coords(const coordinates *coord, const depth *depth)
+{
+    printf("Coordinates: (%F, %F); Range: %F, %F; Pitch: %F; Depth: %d\n",
+           coord->x, coord->y, coord->xR, coord->yR, coord->xS, depth->d);
+}
+
+void adjust_depth(const coordinates *coord, depth *depth)
+{
+    depth->d = 60.2 * pow(coord->xR, -.163);
+}
+
 int arg_check_int(int argc, char *argv[], int i, int numvar, int base)
 {
     char *endptr;
@@ -266,7 +292,7 @@ float arg_check_float(int argc, char *argv[], int i, int numvar)
 int main(int argc, char *argv[])
 {
     coordinates coord;                   // Coodinates Structure
-    int    depth  = 100;                 // Default Depth level of Mandelbrot Calculation
+    depth depth;
     color  colorsIn[2048];               // Colors array
     int    numColors = 0;                // Number of colors to use in color array
     float  colorPower = .3;              // Power exponent to use for color selection
@@ -276,12 +302,14 @@ int main(int argc, char *argv[])
     bool   noWindow = false;             // Default flag for no-window mode
 
     // Set default coordinates before reading in args
-    coord.x = -2;      // Default Start Coordinates
+    coord.x = -2;          // Default Start Coordinates
     coord.y = 2;
-    coord.xR = 4;      // Default Range Coordinates
+    coord.xR = 4;          // Default Range Coordinates
     coord.yR = 4;
-    coord.width = -1;  // Invalid pixel size, to be set later
+    coord.width = -1;      // Invalid pixel size, to be set later
     coord.height = -1;
+    depth.d = 100;         // Default Depth level of Mandelbrot Calculation
+    depth.automatic = true;
 
     // Generate default gradient first
     genGradient(colorsIn, &numColors, colorStart, colorEnd);
@@ -301,7 +329,8 @@ int main(int argc, char *argv[])
         }
         else if (strcmp(argv[i], "--depth") == 0)
         {
-            depth = arg_check_int(argc, argv, i, 1, 10);
+            depth.automatic = false;
+            depth.d = arg_check_int(argc, argv, i, 1, 10);
             i++;
         }
         else if (strcmp(argv[i], "--coords") == 0)
@@ -359,14 +388,12 @@ int main(int argc, char *argv[])
 
     // Create final array of colors to use that is scaled to the depth that is selected
     color colors[2048];
-    scaleColor(colorsIn, colors, numColors, depth, colorPower);
-
-    //printf("%f %f %f %f %d %d %f %f\n", xStart, yStart, xRange, yRange, width, height, xStep, yStep); //DEBUG
+    scaleColor(colorsIn, colors, numColors, depth.d, colorPower);
 
     //If no window mode, just output file and exit
     if (noWindow)
     {
-        generate_png(coord, depth, filename, colors, numColors);
+        generate_png(coord, depth.d, filename, colors, numColors);
         return 0;
     }
 
@@ -387,22 +414,36 @@ int main(int argc, char *argv[])
         // Render Loop
         if (needsRender)
         {
+            //unsigned long long timer = utime(); //DEBUG - Start Timer
+
+            SDL_Texture *texture = SDL_CreateTexture(Main_Renderer, SDL_PIXELFORMAT_RGBX8888, SDL_TEXTUREACCESS_STREAMING, coord.width, coord.height);
+            int pitch;
+            void *pixels;
+            if (SDL_LockTexture(texture, NULL, &pixels, &pitch) != 0)
+                errx(EXIT_FAILURE, "SDL_LockTexture: %s", SDL_GetError());
+            uint32_t (*pixel)[coord.height][pitch/sizeof(uint32_t)] = pixels;
+
             for (int y=0; y<coord.height; y++)
-            {
                 for (int x=0; x<coord.width; x++)
                 {
                     double xValue = coord.x + (x * coord.xS);
                     double yValue = coord.y - (y * coord.yS);
-                    int result = mandel(xValue, yValue, depth);
-                    if (result == -1)
-                        SDL_SetRenderDrawColor(Main_Renderer, 0, 0, 0, 255);
-                    else
-                        SDL_SetRenderDrawColor(Main_Renderer, colors[result].r, colors[result].g, colors[result].b, 255);
-                    SDL_RenderDrawPoint(Main_Renderer, x, y);
+                    int result = mandel(xValue, yValue, depth.d);
 
+                    int finalColor = 0;
+                    if (result != -1)
+                        finalColor = colors[result].hex << 8;
+
+                    (*pixel)[y][x] = finalColor;
                 }
-            }
+
+            SDL_UnlockTexture(texture);
+            SDL_RenderCopy(Main_Renderer, texture, NULL, NULL);
+
+            //printf("%llu - Finish Render\n", utime()-timer); //DEBUG - End Timer
+
             SDL_RenderPresent(Main_Renderer);
+
             needsRender = false;
         }
 
@@ -414,6 +455,8 @@ int main(int argc, char *argv[])
                 coord_zoom(&coord, 1);
             else
                 coord_zoom(&coord, -1);
+            adjust_depth(&coord, &depth);
+            scaleColor(colorsIn, colors, numColors, depth.d, colorPower);
             needsRender = true;
         }
 
@@ -452,8 +495,22 @@ int main(int argc, char *argv[])
         }
 
         if (e.type == SDL_KEYUP)
+        {
+            if (e.key.keysym.sym == SDLK_p)
+                print_coords(&coord, &depth);
             if (e.key.keysym.sym == SDLK_s)
-                generate_png(coord, depth, filename, colors, numColors);
+                generate_png(coord, depth.d, filename, colors, numColors);
+            if (e.key.keysym.sym == SDLK_EQUALS || e.key.keysym.sym == SDLK_MINUS)
+            {
+                if (e.key.keysym.sym == SDLK_EQUALS || e.key.keysym.sym == SDLK_MINUS)
+                    depth.d += 5;
+                if (e.key.keysym.sym == SDLK_MINUS)
+                    if (depth.d > 5) depth.d -= 5;
+                scaleColor(colorsIn, colors, numColors, depth.d, colorPower);
+                depth.automatic = false;
+                needsRender = true;
+            }
+        }
 
         if (e.type == SDL_QUIT)
         {
