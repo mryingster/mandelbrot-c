@@ -390,44 +390,60 @@ int main(int argc, char *argv[])
     color colors[2048];
     scaleColor(colorsIn, colors, numColors, depth.d, colorPower);
 
-    //If no window mode, just output file and exit
+    // If no window mode, just output file and exit
     if (noWindow)
     {
         generate_png(coord, depth.d, filename, colors, numColors);
         return 0;
     }
 
+    // Set up SDL
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window* Main_Window;
     SDL_Renderer* Main_Renderer;
     Main_Window = SDL_CreateWindow("Mandelbrot", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, coord.width, coord.height, SDL_WINDOW_RESIZABLE);
     Main_Renderer = SDL_CreateRenderer(Main_Window, -1, SDL_RENDERER_ACCELERATED);
+    SDL_Texture *texture = SDL_CreateTexture(Main_Renderer, SDL_PIXELFORMAT_RGBX8888, SDL_TEXTUREACCESS_STREAMING, coord.width, coord.height);
+    int pitch;
+    void *pixels;
+    if (SDL_LockTexture(texture, NULL, &pixels, &pitch) != 0)
+        errx(EXIT_FAILURE, "SDL_LockTexture: %s", SDL_GetError());
+    //uint32_t (*pixel)[coord.height][pitch/sizeof(uint32_t)] = pixels;
 
     // Set up struct for tracking mouse movement
     mouse mouseTracker;
     mouseTracker.down = false;
 
     //Main Loop
-    bool needsRender = true;
+    int maxRender = 2;
+    int needsRender = maxRender;
     while (1)
     {
         // Render Loop
-        if (needsRender)
+        if (needsRender > 0)
         {
-            //unsigned long long timer = utime(); //DEBUG - Start Timer
-
-            SDL_Texture *texture = SDL_CreateTexture(Main_Renderer, SDL_PIXELFORMAT_RGBX8888, SDL_TEXTUREACCESS_STREAMING, coord.width, coord.height);
-            int pitch;
-            void *pixels;
-            if (SDL_LockTexture(texture, NULL, &pixels, &pitch) != 0)
-                errx(EXIT_FAILURE, "SDL_LockTexture: %s", SDL_GetError());
             uint32_t (*pixel)[coord.height][pitch/sizeof(uint32_t)] = pixels;
 
-            for (int y=0; y<coord.height; y++)
-                for (int x=0; x<coord.width; x++)
+            //unsigned long long timer = utime(); //DEBUG - Start Timer
+            float pixelSize = pow(2, --needsRender);
+            //printf("%d %d\n", needsRender, pixelSize);
+
+            coordinates scaledCoord;
+            scaledCoord.width = coord.width / pixelSize;
+            scaledCoord.height = coord.height / pixelSize;
+            scaledCoord.x  = coord.x;
+            scaledCoord.xR = coord.xR;
+            scaledCoord.xS = scaledCoord.xR/scaledCoord.width;
+            scaledCoord.y  = coord.y;
+            scaledCoord.yR = coord.yR;
+            scaledCoord.yS = scaledCoord.yR/scaledCoord.height;     // y step value
+            SDL_Rect srcrect = {0, 0, scaledCoord.width, scaledCoord.height};
+
+            for (int y=0; y<scaledCoord.height; y++)
+                for (int x=0; x<scaledCoord.width; x++)
                 {
-                    double xValue = coord.x + (x * coord.xS);
-                    double yValue = coord.y - (y * coord.yS);
+                    double xValue = scaledCoord.x + (x * scaledCoord.xS);
+                    double yValue = scaledCoord.y - (y * scaledCoord.yS);
                     int result = mandel(xValue, yValue, depth.d);
 
                     int finalColor = 0;
@@ -438,17 +454,16 @@ int main(int argc, char *argv[])
                 }
 
             SDL_UnlockTexture(texture);
-            SDL_RenderCopy(Main_Renderer, texture, NULL, NULL);
+            SDL_RenderCopy(Main_Renderer, texture, &srcrect, NULL);
 
             //printf("%llu - Finish Render\n", utime()-timer); //DEBUG - End Timer
 
             SDL_RenderPresent(Main_Renderer);
-
-            needsRender = false;
         }
 
         SDL_Event e;
-        SDL_WaitEvent(&e);
+        //SDL_WaitEvent(&e);
+        if (SDL_WaitEventTimeout(&e, 10) == 0) continue;
         if (e.type == SDL_MOUSEWHEEL)
         {
             if (e.wheel.y > 0)
@@ -457,7 +472,7 @@ int main(int argc, char *argv[])
                 coord_zoom(&coord, -1);
             adjust_depth(&coord, &depth);
             scaleColor(colorsIn, colors, numColors, depth.d, colorPower);
-            needsRender = true;
+            needsRender = maxRender;
         }
 
         if (e.type == SDL_WINDOWEVENT)
@@ -469,8 +484,18 @@ int main(int argc, char *argv[])
                 coord.xR = coord.width * coord.xS;
                 coord.yR = coord.height * coord.yS;
 
-                //Rerender
-                needsRender = true;
+                // Destroy old texture
+                SDL_DestroyTexture(texture);
+
+                // Make New Texture
+                texture = SDL_CreateTexture(Main_Renderer, SDL_PIXELFORMAT_RGBX8888, SDL_TEXTUREACCESS_STREAMING, coord.width, coord.height);
+
+                // Lock with new texture
+                if (SDL_LockTexture(texture, NULL, &pixels, &pitch) != 0)
+                    errx(EXIT_FAILURE, "SDL_LockTexture: %s", SDL_GetError());
+
+                // Rerender
+                needsRender = maxRender;
             }
 
         if (e.type == SDL_MOUSEBUTTONDOWN)
@@ -491,7 +516,7 @@ int main(int argc, char *argv[])
         {
             coord.x = mouseTracker.coordX + ((mouseTracker.mouseX - e.motion.x) * coord.xS);
             coord.y = mouseTracker.coordY - ((mouseTracker.mouseY - e.motion.y) * coord.yS);
-            needsRender = true;
+            needsRender = maxRender;
         }
 
         if (e.type == SDL_KEYUP)
@@ -508,7 +533,7 @@ int main(int argc, char *argv[])
                     if (depth.d > 5) depth.d -= 5;
                 scaleColor(colorsIn, colors, numColors, depth.d, colorPower);
                 depth.automatic = false;
-                needsRender = true;
+                needsRender = maxRender;
             }
         }
 
