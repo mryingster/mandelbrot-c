@@ -470,8 +470,11 @@ int main(int argc, char *argv[])
                 coord_zoom(&coord, 1);
             else
                 coord_zoom(&coord, -1);
-            adjust_depth(&coord, &depth);
-            scaleColor(colorsIn, colors, numColors, depth.d, colorPower);
+            if (depth.automatic == true)
+            {
+                adjust_depth(&coord, &depth);
+                scaleColor(colorsIn, colors, numColors, depth.d, colorPower);
+            }
             needsRender = maxRender;
         }
 
@@ -527,12 +530,12 @@ int main(int argc, char *argv[])
                 generate_png(coord, depth.d, filename, colors, numColors);
             if (e.key.keysym.sym == SDLK_EQUALS || e.key.keysym.sym == SDLK_MINUS)
             {
-                if (e.key.keysym.sym == SDLK_EQUALS || e.key.keysym.sym == SDLK_MINUS)
+                depth.automatic = false;
+                if (e.key.keysym.sym == SDLK_EQUALS)
                     depth.d += 5;
                 if (e.key.keysym.sym == SDLK_MINUS)
                     if (depth.d > 5) depth.d -= 5;
                 scaleColor(colorsIn, colors, numColors, depth.d, colorPower);
-                depth.automatic = false;
                 needsRender = maxRender;
             }
         }
